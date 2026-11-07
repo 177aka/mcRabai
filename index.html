@@ -53,38 +53,97 @@
     </div>
   </div>
 
-  <!-- Tutoriel PWA précis et guidé -->
-  <div class="pwa-install-overlay" id="pwaInstallNotice">
+  <!-- Overlay d'installation PWA épuré et sans emojis -->
+  <div class="pwa-install-overlay active" id="pwaInstallNotice">
     <div class="pwa-card">
-      <div class="pwa-header-icon">📱</div>
-      <h2>Installation requise</h2>
-      <p>Pour profiter de <strong>McRabai</strong> en plein écran comme une vraie application, ajoutez-la à votre écran d'accueil :</p>
-      
-      <div class="instructions-box" id="pwaInstructions">
-        <!-- Instructions iPhone / Safari -->
-        <div class="device-group">
-          <strong>Sur iPhone (Safari) :</strong>
-          <ol>
-            <li>Appuyez sur le bouton <strong>Partager</strong> <span class="badge-icon">⎋</span> situé en bas de l'écran.</li>
-            <li>Faites défiler vers le bas et sélectionnez <strong>Sur l'écran d'accueil</strong> <span class="badge-icon">➕</span>.</li>
-            <li>Appuyez sur <strong>Ajouter</strong> en haut à droite.</li>
-          </ol>
+      <div class="pwa-header">
+        <div class="pwa-app-logo">
+          <img src="MonMcDo.png" alt="McRabai">
         </div>
+        <div>
+          <h2>Installer McRabai</h2>
+          <p>Ajoutez l'application à votre écran d'accueil</p>
+        </div>
+      </div>
+      
+      <!-- Sélecteur d'onglets iPhone / Android -->
+      <div class="pwa-tabs">
+        <button class="pwa-tab-btn active" onclick="switchPwaTab('ios')">iPhone (Safari)</button>
+        <button class="pwa-tab-btn" onclick="switchPwaTab('android')">Android (Chrome)</button>
+      </div>
 
-        <div class="pwa-separator"></div>
-
-        <!-- Instructions Android / Chrome / Samsung -->
-        <div class="device-group">
-          <strong>Sur Android (Chrome / Samsung) :</strong>
-          <ol>
-            <li>Appuyez sur les <strong>3 points</strong> <span class="badge-icon">⋮</span> en haut à droite du navigateur.</li>
-            <li>Sélectionnez <strong>Installer l'application</strong> ou <strong>Ajouter à l'écran d'accueil</strong>.</li>
-            <li>Confirmez en appuyant sur <strong>Installer</strong>.</li>
-          </ol>
+      <!-- Contenu iPhone (Safari) -->
+      <div id="tab-ios" class="pwa-tab-content active">
+        <div class="pwa-steps-list">
+          <div class="pwa-step-item">
+            <div class="step-number">1</div>
+            <div class="step-text">
+              <strong>Ouvrir dans le navigateur Web</strong>
+              <span>Si le lien a été ouvert depuis une application (réseau social, messagerie), ouvrez-le dans Safari.</span>
+            </div>
+          </div>
+          <div class="pwa-step-item">
+            <div class="step-number">2</div>
+            <div class="step-text">
+              <strong>Partager</strong>
+              <span>Appuyez sur le bouton Partager dans Safari.</span>
+            </div>
+          </div>
+          <div class="pwa-step-item">
+            <div class="step-number">3</div>
+            <div class="step-text">
+              <strong>Sur l'écran d'accueil</strong>
+              <span>Sélectionnez Sur l'écran d'accueil.</span>
+            </div>
+          </div>
+          <div class="pwa-step-item">
+            <div class="step-number">4</div>
+            <div class="step-text">
+              <strong>Ajouter à nouveau</strong>
+              <span>Confirmez en appuyant sur Ajouter en haut à droite.</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <p class="pwa-footer-tip">Une fois fait, ouvrez l'application directement depuis l'icône sur votre écran d'accueil !</p>
+      <!-- Contenu Android (Chrome) -->
+      <div id="tab-android" class="pwa-tab-content">
+        <div class="pwa-steps-list">
+          <div class="pwa-step-item">
+            <div class="step-number">1</div>
+            <div class="step-text">
+              <strong>Ouvrir dans le navigateur Web</strong>
+              <span>Si le lien a été ouvert depuis une application (réseau social, messagerie), ouvrez-le dans Chrome.</span>
+            </div>
+          </div>
+          <div class="pwa-step-item">
+            <div class="step-number">2</div>
+            <div class="step-text">
+              <strong>Installer et créer un raccourci</strong>
+              <span>Appuyez sur les 3 points du navigateur puis sur Installer et créer un raccourci.</span>
+            </div>
+          </div>
+          <div class="pwa-step-item">
+            <div class="step-number">3</div>
+            <div class="step-text">
+              <strong>Installer</strong>
+              <span>Cliquez sur Installer puis confirmez à nouveau.</span>
+            </div>
+          </div>
+          <div class="pwa-step-item">
+            <div class="step-number">4</div>
+            <div class="step-text">
+              <strong>Ouvrir depuis l'accueil</strong>
+              <span>Quittez le navigateur et ouvrez l'application depuis votre écran d'accueil.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pwa-alert-box">
+        <strong>Installation requise</strong>
+        <span>L'application doit être installée sur votre écran d'accueil pour fonctionner.</span>
+      </div>
     </div>
   </div>
 
@@ -139,5 +198,26 @@
   </div>
 
   <script src="app.js"></script>
+  <script>
+    function switchPwaTab(platform) {
+      document.querySelectorAll('.pwa-tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.pwa-tab-content').forEach(content => content.classList.remove('active'));
+      
+      if (platform === 'ios') {
+        document.querySelector('.pwa-tab-btn:nth-child(1)').classList.add('active');
+        document.getElementById('tab-ios').classList.add('active');
+      } else {
+        document.querySelector('.pwa-tab-btn:nth-child(2)').classList.add('active');
+        document.getElementById('tab-android').classList.add('active');
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (!isIOS) {
+        switchPwaTab('android');
+      }
+    });
+  </script>
 </body>
 </html>
