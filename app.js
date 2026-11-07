@@ -11,8 +11,51 @@ const accessCodeInput = document.getElementById('accessCodeInput');
 const unlockBtn = document.getElementById('unlockBtn');
 const lockError = document.getElementById('lockError');
 const loadingSteps = document.getElementById('loadingSteps');
-const trialBtn = document.getElementById('trialBtn');
 const closeBtn = document.getElementById('closeBtn');
+
+function checkEnvironment() {
+  // Détecte si vous êtes en train de tester en local sur votre PC
+  const isLocalDev = window.location.hostname === "localhost" ||  window.location.hostname === "127.0.0.1" || window.location.protocol === "file:";
+
+  // SI VOUS ÊTES SUR PC EN TEST : On ignore les restrictions !
+  if (isLocalDev) {
+    console.log("🛠️ Mode test local détecté : restrictions PC désactivées.");
+    return true;
+  }
+
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+  const pwaNotice = document.getElementById('pwaInstallNotice');
+  const pwaTitle = document.getElementById('pwaTitle');
+  const pwaReasonText = document.getElementById('pwaReasonText');
+  const pwaInstructions = document.getElementById('pwaInstructions');
+
+  // Sur ordinateur en production (en ligne) -> Bloquer
+  if (!isMobile) {
+    if (pwaNotice) pwaNotice.classList.add('active');
+    if (pwaTitle) pwaTitle.textContent = "Accès refusé";
+    if (pwaReasonText) pwaReasonText.textContent = "Cette application est strictly réservée aux téléphones mobiles.";
+    if (pwaInstructions) pwaInstructions.style.display = 'none';
+    document.body.classList.add('locked');
+    return false;
+  }
+
+  // Sur navigateur web mobile non installé -> Demander l'installation PWA
+  if (!isStandalone) {
+    if (pwaNotice) pwaNotice.classList.add('active');
+    if (pwaTitle) pwaTitle.textContent = "Installation requise";
+    if (pwaReasonText) pwaReasonText.textContent = "Pour utiliser l'offre Platine, veuillez l'ajouter à votre écran d'accueil :";
+    if (pwaInstructions) pwaInstructions.style.display = 'block';
+    document.body.classList.add('locked');
+    return false;
+  }
+
+  return true;
+}
+
+if (!checkEnvironment()) {
+  throw new Error("Environnement non compatible.");
+}
 
 // --- Anti-veille de l'écran (Wake Lock API) ---
 let wakeLock = null;
@@ -26,7 +69,6 @@ async function requestWakeLock() {
   }
 }
 
-// Relâcher ou réactiver le Wake Lock si l'app change de focus
 document.addEventListener('visibilitychange', async () => {
   if (wakeLock !== null && document.visibilityState === 'visible') {
     if (localStorage.getItem('platine_unlocked') === 'true') {
@@ -46,7 +88,7 @@ function lockApp() {
 function unlockApp() {
   if (lockScreen) lockScreen.classList.add('hidden');
   document.body.classList.remove('locked');
-  requestWakeLock(); // Active l'anti-veille dès le déverrouillage
+  requestWakeLock();
 }
 
 function showCustomModal(title, message, onConfirm, confirmText = "Confirmer") {
@@ -80,15 +122,38 @@ function showCustomModal(title, message, onConfirm, confirmText = "Confirmer") {
   });
 }
 
-// Vérification initiale de la licence au démarrage
+// --- 2. Synchronisation automatique au retour du réseau ---
+window.addEventListener('online', () => {
+  const savedCode = localStorage.getItem('platine_used_code');
+  if (localStorage.getItem('platine_unlocked') === 'true' && savedCode) {
+    fetch(`${GOOGLE_SCRIPT_URL}?action=verify&code=${encodeURIComponent(savedCode)}&deviceId=${encodeURIComponent(deviceId)}`)
+      .then(response => response.json())
+      .then(data => {
+        if (!data.valid) {
+          localStorage.removeItem('platine_unlocked');
+          localStorage.removeItem('platine_used_code');
+          lockApp();
+          if (lockError) lockError.textContent = "Connexion rétablie : Votre licence a expiré ou a été révoquée.";
+        }
+      })
+      .catch(() => {});
+  }
+});
+
+// --- Vérification initiale de la licence au démarrage ---
 if (localStorage.getItem('platine_unlocked') === 'true') {
   const savedCode = localStorage.getItem('platine_used_code');
   
   if (savedCode && deviceId) {
-    if(loadingSteps) loadingSteps.textContent = "Vérification de la licence en arrière-plan...";
-    fetch(`${GOOGLE_SCRIPT_URL}?action=verify&code=${encodeURIComponent(savedCode)}&deviceId=${encodeURIComponent(deviceId)}`)
+    if(loadingSteps) loadingSteps.textContent = "Vérification de la licence...";
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    fetch(`${GOOGLE_SCRIPT_URL}?action=verify&code=${encodeURIComponent(savedCode)}&deviceId=${encodeURIComponent(deviceId)}`, { signal: controller.signal })
       .then(response => response.json())
       .then(data => {
+        clearTimeout(timeoutId);
         if(loadingSteps) loadingSteps.textContent = "";
         if (!data.valid) {
           localStorage.removeItem('platine_unlocked');
@@ -100,8 +165,10 @@ if (localStorage.getItem('platine_unlocked') === 'true') {
         }
       })
       .catch(() => {
+        clearTimeout(timeoutId);
         if(loadingSteps) loadingSteps.textContent = "";
-        unlockApp(); // Tolérance hors-ligne
+        // Tolérance hors-ligne si pas de réseau au démarrage
+        unlockApp();
       });
   } else {
     localStorage.removeItem('platine_unlocked');
@@ -156,22 +223,28 @@ if (unlockBtn) {
   });
 }
 
-if (trialBtn) {
-  trialBtn.addEventListener('click', () => {
-    const hasClaimedTrial = localStorage.getItem('platine_trial_claimed');
-    if (hasClaimedTrial === 'true') {
-      showCustomModal(
-        "Déjà réclamé",
-        "Vous avez déjà réclamé votre journée d'essai gratuite sur cet appareil. Contactez @qcplgstarz sur Snapchat pour un forfait complet ou sur-mesure.",
-        () => {},
-        "Compris"
-      );
-      return;
+function handleExpirationCheck(expDateStr) {
+  const alertBanner = document.getElementById('expirationAlertBanner');
+  if (!alertBanner || !expDateStr || expDateStr === "À vie") {
+    if (alertBanner) alertBanner.style.display = 'none';
+    return;
+  }
+
+  const expDateObj = new Date(expDateStr + "T23:59:59");
+  const now = new Date();
+  const diffTime = expDateObj - now;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 2 && diffDays >= 0) {
+    alertBanner.style.display = 'block';
+    if (diffDays === 0) {
+      alertBanner.innerHTML = "⚠️ Attention : Votre licence expire aujourd'hui ! Pensez à renouveler.";
+    } else {
+      alertBanner.innerHTML = `⚠️ Attention : Votre licence expire dans ${diffDays} jour(s) !`;
     }
-    
-    localStorage.setItem('platine_trial_claimed', 'true');
-    window.location.href = "https://www.snapchat.com/add/qcplgstarz";
-  });
+  } else {
+    alertBanner.style.display = 'none';
+  }
 }
 
 if (closeBtn) {
@@ -180,7 +253,9 @@ if (closeBtn) {
     
     const accountHTML = `
       <div class="modalites-text">
-        <p>Bienvenue dans votre espace de gestion <strong>Mon Compte</strong>.</p>
+        <p style="font-size: 16px; margin-bottom: 20px;">
+          Bienvenue dans votre espace de gestion, <strong id="clientNameText" style="color: #c8102e;">Chargement...</strong>
+        </p>
         
         <div class="account-box">
           <strong>Votre Licence active :</strong>
@@ -188,23 +263,26 @@ if (closeBtn) {
             <span id="maskedLicence">••••••••••••••••</span>
             <button id="toggleLicenceBtn" type="button">Afficher</button>
           </div>
-          <div class="warning-share">Avertissement : Ne partagez jamais votre licence sous peine de révocation définitive et immédiate.</div>
+          <div class="warning-share">Avertissement : Ne partagez jamais votre licence sous peine de révocation définitive.</div>
         </div>
 
         <div class="account-box">
           <strong>État de l'abonnement :</strong>
+          <div id="accountAlertBanner" style="display: none; margin-top: 8px; padding: 8px 10px; background-color: #ffebe9; border: 1px solid #d8232a; color: #d8232a; border-radius: 6px; font-size: 12px; font-weight: 700; text-align: center;"></div>
+          
           <p style="margin: 6px 0 0 0; font-size:13px; color:#444;" id="subStatusText">Chargement des données en direct...</p>
         </div>
 
         <div class="account-box">
           <strong>Tarifs & Support officiel :</strong>
           <p style="margin: 6px 0 0 0; font-size:13px;">
-            • 1 Jour : 2 $<br>
-            • 1 Semaine : 7 $<br>
-            • 2 Mois : 13 $<br>
-            • À Vie : 34 $<br>
+            • 1 Mois : 10 $<br>
+            • 3 Mois : 15 $<br>
+            • 6 Mois : 25 $<br>
+            • 1 An : 35 $<br>
+            • À Vie : 45 $<br>
             • Sur mesure : Disponible sur demande.<br><br>
-            Pour tout achat ou question, contactez <strong>qcplgstarz</strong> sur Snapchat.
+            Pour tout achat ou question, contactez <a href="https://www.snapchat.com/add/ro.mailey" target="_blank" style="color: #d8232a; font-weight: bold; text-decoration: underline;">ro.mailey</a> sur Snapchat.
           </p>
         </div>
 
@@ -231,16 +309,21 @@ if (closeBtn) {
       });
     }
 
-    // Interrogation pour récupérer le statut et le temps restant exact
     const subStatusText = document.getElementById('subStatusText');
+    const clientNameText = document.getElementById('clientNameText');
+    const accountAlertBanner = document.getElementById('accountAlertBanner');
+
     fetch(`${GOOGLE_SCRIPT_URL}?action=verify&code=${encodeURIComponent(currentLicence)}&deviceId=${encodeURIComponent(deviceId)}`)
       .then(res => res.json())
       .then(data => {
+        if (clientNameText) {
+          clientNameText.textContent = data.client ? data.client : "Utilisateur Privilégié";
+        }
+
         if (subStatusText) {
           if (data.valid) {
             let expirationText = data.expDate === "À vie" ? "Accès permanent (À vie)" : `Expire le : ${data.expDate}`;
             
-            // Calcul du temps restant si ce n'est pas "À vie"
             let timeRemainingHTML = "";
             if (data.expDate !== "À vie") {
               const expDateObj = new Date(data.expDate + "T23:59:59");
@@ -252,6 +335,16 @@ if (closeBtn) {
                 timeRemainingHTML = `<br><small style="color: #22a7f2; font-weight: 600;">Temps restant : ${diffDays} jour(s)</small>`;
               } else {
                 timeRemainingHTML = `<br><small style="color: #d8232a; font-weight: 600;">Expire aujourd'hui</small>`;
+              }
+
+              // Gestion de l'alerte d'expiration imminente (<= 2 jours) dans Mon Compte
+              if (diffDays <= 2 && diffDays >= 0 && accountAlertBanner) {
+                accountAlertBanner.style.display = 'block';
+                if (diffDays === 0) {
+                  accountAlertBanner.innerHTML = "⚠️ Attention : Votre licence expire aujourd'hui !";
+                } else {
+                  accountAlertBanner.innerHTML = `⚠️ Attention : Votre licence expire dans ${diffDays} jour(s) !`;
+                }
               }
             }
 
@@ -267,9 +360,8 @@ if (closeBtn) {
         }
       })
       .catch(() => {
-        if (subStatusText) {
-          subStatusText.textContent = "Statut actif (Mode hors-ligne)";
-        }
+        if (clientNameText) clientNameText.textContent = "Mode Hors-ligne";
+        if (subStatusText) subStatusText.textContent = "Statut actif (Mode hors-ligne)";
       });
 
     const logoutBtn = document.getElementById('logoutBtn');
@@ -305,26 +397,6 @@ window.addEventListener('load', () => {
     }
   }, 400);
 });
-
-function checkEnvironment() {
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  const isDesktop = !isTouchDevice && !/Mobile|Android/i.test(navigator.userAgent);
-
-  if (isMobile && !isStandalone && !isDesktop) {
-    document.getElementById('pwaInstallNotice').classList.add('active');
-  }
-}
-
-checkEnvironment();
-
-const pwaNotice = document.getElementById('pwaInstallNotice');
-if (pwaNotice) {
-  pwaNotice.addEventListener('click', () => {
-    pwaNotice.classList.remove('active');
-  });
-}
 
 const mainView = document.getElementById('mainView');
 const subView = document.getElementById('subView');

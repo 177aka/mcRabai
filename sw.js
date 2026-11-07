@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mcdonalds-platine-v30';
+const CACHE_NAME = 'mcdonalds-platine-v31';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

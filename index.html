@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Offre Platine</title>
+  <title>McRabai</title>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="Offre Platine">
+  <meta name="apple-mobile-web-app-title" content="McRabai">
   <meta name="theme-color" content="#ffffff">
 </head>
 <body>
@@ -36,29 +36,28 @@
       <div class="lock-extras">
         <h3>Besoin d'aide ou d'une licence ?</h3>
         <div class="snap-box">
-          Contacte <strong>qcplgstarz</strong> sur Snapchat pour toute question ou achat :<br>
-          <a href="https://www.snapchat.com/add/qcplgstarz" target="_blank">Ouvrir Snapchat (qcplgstarz)</a>
+          Contacte <strong>ro.mailey</strong> sur Snapchat pour toute question ou achat :<br>
+          <a href="https://www.snapchat.com/add/ro.mailey" target="_blank">Ouvrir Snapchat (ro.mailey)</a>
         </div>
 
         <h3>Forfaits disponibles</h3>
-        <div class="forfaits-preview">
-          <div class="forfait-pill">1 Jour <span>2 $</span></div>
-          <div class="forfait-pill">1 Semaine <span>7 $</span></div>
-          <div class="forfait-pill">2 Mois <span>13 $</span></div>
-          <div class="forfait-pill">À Vie <span>34 $</span></div>
+        <div class="forfaits-preview" style="grid-template-columns: repeat(2, 1fr);">
+          <div class="forfait-pill">1 Mois <span>10 $</span></div>
+          <div class="forfait-pill">3 Mois <span>15 $</span></div>
+          <div class="forfait-pill">6 Mois <span>25 $</span></div>
+          <div class="forfait-pill">1 An <span>35 $</span></div>
+          <div class="forfait-pill" style="grid-column: span 2;">À Vie (Permanent) <span>45 $</span></div>
         </div>
-        <p class="custom-time-notice">Temps personnalisé disponible sur demande via Snapchat.</p>
-
-        <button class="trial-btn" id="trialBtn">Demander 1 jour gratuit (1x par appareil)</button>
+        <p class="custom-time-notice">Paiement et activation rapide via Snapchat.</p>
       </div>
     </div>
   </div>
 
   <div class="pwa-install-overlay" id="pwaInstallNotice">
     <div class="pwa-card">
-      <h2>Installation requise</h2>
-      <p>Pour utiliser l'offre Platine, veuillez ajouter cette application à votre écran d'accueil :</p>
-      <div class="instructions-box">
+      <h2 id="pwaTitle">Installation requise</h2>
+      <p id="pwaReasonText">Pour utiliser l'offre Platine, veuillez ajouter cette application à votre écran d'accueil :</p>
+      <div class="instructions-box" id="pwaInstructions">
         <div class="device-group">
           <strong>Sur iPhone (Safari) :</strong>
           <ol>
@@ -82,6 +81,9 @@
   <div class="view active" id="mainView">
     <div class="container">
       <div class="close-icon" id="closeBtn">&#x2715;</div>
+
+      <div id="expirationAlertBanner" class="expiration-alert-banner" style="display: none;"></div>
+      
       <div class="badge-cueillette">
         <img src="McCueillet.jpg" alt="Cueillette" class="tag-icon">
         <span>Cueillette seulement</span>

@@ -423,13 +423,13 @@ p {
 }
 
 .subView-content h2 {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 900;
   color: #111111;
-  margin-top: 0;
+  margin-top: 10px;
   margin-bottom: 24px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #eeeeee;
+  text-align: center;
+  border-bottom: none;
   letter-spacing: -0.5px;
 }
 
@@ -604,4 +604,17 @@ p {
 .small-text {
   font-size: 12px !important;
   color: #777777 !important;
+}
+
+.expiration-alert-banner {
+  background-color: #ffebe9;
+  border: 1px solid #d8232a;
+  color: #d8232a;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(216, 35, 42, 0.15);
 }
