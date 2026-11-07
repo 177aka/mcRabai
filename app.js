@@ -14,48 +14,27 @@ const loadingSteps = document.getElementById('loadingSteps');
 const closeBtn = document.getElementById('closeBtn');
 
 function checkEnvironment() {
-  // Détecte si vous êtes en train de tester en local sur votre PC
-  const isLocalDev = window.location.hostname === "localhost" ||  window.location.hostname === "127.0.0.1" || window.location.protocol === "file:";
-
-  // SI VOUS ÊTES SUR PC EN TEST : On ignore les restrictions !
-  if (isLocalDev) {
-    console.log("🛠️ Mode test local détecté : restrictions PC désactivées.");
-    return true;
-  }
-
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   const pwaNotice = document.getElementById('pwaInstallNotice');
-  const pwaTitle = document.getElementById('pwaTitle');
-  const pwaReasonText = document.getElementById('pwaReasonText');
   const pwaInstructions = document.getElementById('pwaInstructions');
 
-  // Sur ordinateur en production (en ligne) -> Bloquer
-  if (!isMobile) {
+  // Si on est sur mobile et que l'app n'est PAS installée en mode application : afficher le tuto
+  if (isMobile && !isStandalone) {
     if (pwaNotice) pwaNotice.classList.add('active');
-    if (pwaTitle) pwaTitle.textContent = "Accès refusé";
-    if (pwaReasonText) pwaReasonText.textContent = "Cette application est strictly réservée aux téléphones mobiles.";
-    if (pwaInstructions) pwaInstructions.style.display = 'none';
-    document.body.classList.add('locked');
-    return false;
-  }
-
-  // Sur navigateur web mobile non installé -> Demander l'installation PWA
-  if (!isStandalone) {
-    if (pwaNotice) pwaNotice.classList.add('active');
-    if (pwaTitle) pwaTitle.textContent = "Installation requise";
-    if (pwaReasonText) pwaReasonText.textContent = "Pour utiliser l'offre Platine, veuillez l'ajouter à votre écran d'accueil :";
     if (pwaInstructions) pwaInstructions.style.display = 'block';
     document.body.classList.add('locked');
     return false;
   }
 
+  // Si c'est sur PC ou déjà installé sur mobile, on laisse passer sans bloquer
+  if (pwaNotice) pwaNotice.classList.remove('active');
+  document.body.classList.remove('locked');
   return true;
 }
 
-if (!checkEnvironment()) {
-  throw new Error("Environnement non compatible.");
-}
+// On n'interrompt plus l'exécution par une erreur fatale, checkEnvironment gère l'affichage du tuto proprement
+checkEnvironment();
 
 // --- Anti-veille de l'écran (Wake Lock API) ---
 let wakeLock = null;
@@ -63,9 +42,7 @@ async function requestWakeLock() {
   if ('wakeLock' in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-    } catch (err) {
-      console.log("Erreur Wake Lock:", err);
-    }
+    } catch (err) {}
   }
 }
 
@@ -112,17 +89,13 @@ function showCustomModal(title, message, onConfirm, confirmText = "Confirmer") {
 
   document.body.appendChild(overlay);
 
-  document.getElementById('modalCancelBtn').addEventListener('click', () => {
-    overlay.remove();
-  });
-
+  document.getElementById('modalCancelBtn').addEventListener('click', () => overlay.remove());
   document.getElementById('modalConfirmBtn').addEventListener('click', () => {
     overlay.remove();
     if (onConfirm) onConfirm();
   });
 }
 
-// --- 2. Synchronisation automatique au retour du réseau ---
 window.addEventListener('online', () => {
   const savedCode = localStorage.getItem('platine_used_code');
   if (localStorage.getItem('platine_unlocked') === 'true' && savedCode) {
@@ -140,13 +113,10 @@ window.addEventListener('online', () => {
   }
 });
 
-// --- Vérification initiale de la licence au démarrage ---
 if (localStorage.getItem('platine_unlocked') === 'true') {
   const savedCode = localStorage.getItem('platine_used_code');
-  
   if (savedCode && deviceId) {
     if(loadingSteps) loadingSteps.textContent = "Vérification de la licence...";
-    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000);
 
@@ -167,7 +137,6 @@ if (localStorage.getItem('platine_unlocked') === 'true') {
       .catch(() => {
         clearTimeout(timeoutId);
         if(loadingSteps) loadingSteps.textContent = "";
-        // Tolérance hors-ligne si pas de réseau au démarrage
         unlockApp();
       });
   } else {
@@ -189,18 +158,10 @@ if (unlockBtn) {
     unlockBtn.disabled = true;
     unlockBtn.textContent = "Connexion...";
     lockError.textContent = "";
-    
-    if(loadingSteps) loadingSteps.textContent = "1. Connexion au serveur sécurisé...";
-    
-    setTimeout(() => {
-      if(loadingSteps) loadingSteps.textContent = "2. Interrogation de l'API Google Sheets...";
-    }, 400);
+    if(loadingSteps) loadingSteps.textContent = "Connexion au serveur...";
 
     fetch(`${GOOGLE_SCRIPT_URL}?action=verify&code=${encodeURIComponent(enteredCode)}&deviceId=${encodeURIComponent(deviceId)}`)
-      .then(response => {
-        if(loadingSteps) loadingSteps.textContent = "3. Analyse de la réponse du serveur...";
-        return response.json();
-      })
+      .then(response => response.json())
       .then(data => {
         unlockBtn.disabled = false;
         unlockBtn.textContent = "Déverrouiller";
@@ -218,33 +179,9 @@ if (unlockBtn) {
         unlockBtn.disabled = false;
         unlockBtn.textContent = "Déverrouiller";
         if(loadingSteps) loadingSteps.textContent = "";
-        lockError.textContent = "Erreur de connexion internet avec le serveur.";
+        lockError.textContent = "Erreur de connexion internet.";
       });
   });
-}
-
-function handleExpirationCheck(expDateStr) {
-  const alertBanner = document.getElementById('expirationAlertBanner');
-  if (!alertBanner || !expDateStr || expDateStr === "À vie") {
-    if (alertBanner) alertBanner.style.display = 'none';
-    return;
-  }
-
-  const expDateObj = new Date(expDateStr + "T23:59:59");
-  const now = new Date();
-  const diffTime = expDateObj - now;
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  if (diffDays <= 2 && diffDays >= 0) {
-    alertBanner.style.display = 'block';
-    if (diffDays === 0) {
-      alertBanner.innerHTML = "⚠️ Attention : Votre licence expire aujourd'hui ! Pensez à renouveler.";
-    } else {
-      alertBanner.innerHTML = `⚠️ Attention : Votre licence expire dans ${diffDays} jour(s) !`;
-    }
-  } else {
-    alertBanner.style.display = 'none';
-  }
 }
 
 if (closeBtn) {
@@ -254,7 +191,7 @@ if (closeBtn) {
     const accountHTML = `
       <div class="modalites-text">
         <p style="font-size: 16px; margin-bottom: 20px;">
-          Bienvenue dans votre espace de gestion, <strong id="clientNameText" style="color: #c8102e;">Chargement...</strong>
+          Bienvenue dans votre espace, <strong id="clientNameText" style="color: #c8102e;">Chargement...</strong>
         </p>
         
         <div class="account-box">
@@ -263,26 +200,20 @@ if (closeBtn) {
             <span id="maskedLicence">••••••••••••••••</span>
             <button id="toggleLicenceBtn" type="button">Afficher</button>
           </div>
-          <div class="warning-share">Avertissement : Ne partagez jamais votre licence sous peine de révocation définitive.</div>
+          <div class="warning-share">Ne partagez jamais votre licence (risque de révocation).</div>
         </div>
 
         <div class="account-box">
           <strong>État de l'abonnement :</strong>
           <div id="accountAlertBanner" style="display: none; margin-top: 8px; padding: 8px 10px; background-color: #ffebe9; border: 1px solid #d8232a; color: #d8232a; border-radius: 6px; font-size: 12px; font-weight: 700; text-align: center;"></div>
-          
-          <p style="margin: 6px 0 0 0; font-size:13px; color:#444;" id="subStatusText">Chargement des données en direct...</p>
+          <p style="margin: 6px 0 0 0; font-size:13px; color:#444;" id="subStatusText">Chargement...</p>
         </div>
 
         <div class="account-box">
           <strong>Tarifs & Support officiel :</strong>
           <p style="margin: 6px 0 0 0; font-size:13px;">
-            • 1 Mois : 10 $<br>
-            • 3 Mois : 15 $<br>
-            • 6 Mois : 25 $<br>
-            • 1 An : 35 $<br>
-            • À Vie : 45 $<br>
-            • Sur mesure : Disponible sur demande.<br><br>
-            Pour tout achat ou question, contactez <a href="https://www.snapchat.com/add/ro.mailey" target="_blank" style="color: #d8232a; font-weight: bold; text-decoration: underline;">ro.mailey</a> sur Snapchat.
+            • 1 Mois : 10 $<br>• 3 Mois : 15 $<br>• 6 Mois : 25 $<br>• 1 An : 35 $<br>• À Vie : 45 $<br><br>
+            Contactez <a href="https://www.snapchat.com/add/ro.mailey" target="_blank" style="color: #d8232a; font-weight: bold; text-decoration: underline;">ro.mailey</a> sur Snapchat.
           </p>
         </div>
 
@@ -299,13 +230,8 @@ if (closeBtn) {
     if (toggleBtn) {
       toggleBtn.addEventListener('click', () => {
         isVisible = !isVisible;
-        if (isVisible) {
-          maskedSpan.textContent = currentLicence;
-          toggleBtn.textContent = "Masquer";
-        } else {
-          maskedSpan.textContent = "••••••••••••••••";
-          toggleBtn.textContent = "Afficher";
-        }
+        maskedSpan.textContent = isVisible ? currentLicence : "••••••••••••••••";
+        toggleBtn.textContent = isVisible ? "Masquer" : "Afficher";
       });
     }
 
@@ -316,47 +242,10 @@ if (closeBtn) {
     fetch(`${GOOGLE_SCRIPT_URL}?action=verify&code=${encodeURIComponent(currentLicence)}&deviceId=${encodeURIComponent(deviceId)}`)
       .then(res => res.json())
       .then(data => {
-        if (clientNameText) {
-          clientNameText.textContent = data.client ? data.client : "Utilisateur Privilégié";
-        }
-
-        if (subStatusText) {
-          if (data.valid) {
-            let expirationText = data.expDate === "À vie" ? "Accès permanent (À vie)" : `Expire le : ${data.expDate}`;
-            
-            let timeRemainingHTML = "";
-            if (data.expDate !== "À vie") {
-              const expDateObj = new Date(data.expDate + "T23:59:59");
-              const now = new Date();
-              const diffTime = expDateObj - now;
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-              
-              if (diffDays > 0) {
-                timeRemainingHTML = `<br><small style="color: #22a7f2; font-weight: 600;">Temps restant : ${diffDays} jour(s)</small>`;
-              } else {
-                timeRemainingHTML = `<br><small style="color: #d8232a; font-weight: 600;">Expire aujourd'hui</small>`;
-              }
-
-              // Gestion de l'alerte d'expiration imminente (<= 2 jours) dans Mon Compte
-              if (diffDays <= 2 && diffDays >= 0 && accountAlertBanner) {
-                accountAlertBanner.style.display = 'block';
-                if (diffDays === 0) {
-                  accountAlertBanner.innerHTML = "⚠️ Attention : Votre licence expire aujourd'hui !";
-                } else {
-                  accountAlertBanner.innerHTML = `⚠️ Attention : Votre licence expire dans ${diffDays} jour(s) !`;
-                }
-              }
-            }
-
-            subStatusText.innerHTML = `
-              <span style="color: green; font-weight: bold;">● Licence active et valide</span><br>
-              <span>${expirationText}</span>
-              ${timeRemainingHTML}
-              <br><small style="color: #666;">Appareil lié et sécurisé.</small>
-            `;
-          } else {
-            subStatusText.innerHTML = `<span style="color: red; font-weight: bold;">● ${data.reason || "Problème détecté avec la licence"}</span>`;
-          }
+        if (clientNameText) clientNameText.textContent = data.client ? data.client : "Utilisateur VIP";
+        if (subStatusText && data.valid) {
+          let expirationText = data.expDate === "À vie" ? "Accès permanent (À vie)" : `Expire le : ${data.expDate}`;
+          subStatusText.innerHTML = `<span style="color: green; font-weight: bold;">● Licence active et valide</span><br><span>${expirationText}</span><br><small style="color: #666;">Appareil sécurisé.</small>`;
         }
       })
       .catch(() => {
@@ -367,16 +256,11 @@ if (closeBtn) {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
-        showCustomModal(
-          "Déconnexion",
-          "Êtes-vous sûr de vouloir vous déconnecter de cet appareil ? Vous aurez besoin d'une licence valide pour vous reconnecter.",
-          () => {
-            localStorage.removeItem('platine_unlocked');
-            localStorage.removeItem('platine_used_code');
-            window.location.reload();
-          },
-          "Se déconnecter"
-        );
+        showCustomModal("Déconnexion", "Voulez-vous vous déconnecter de cet appareil ?", () => {
+          localStorage.removeItem('platine_unlocked');
+          localStorage.removeItem('platine_used_code');
+          window.location.reload();
+        }, "Se déconnecter");
       });
     }
   });
@@ -384,7 +268,7 @@ if (closeBtn) {
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(err => console.log(err));
+    navigator.serviceWorker.register('./sw.js').catch(err => {});
   });
 }
 
@@ -423,39 +307,18 @@ if (backBtn) {
 
 document.getElementById('modalitesLink').addEventListener('click', (e) => {
   e.preventDefault();
-  const modalitesHTML = `
-    <div class="modalites-text">
-      <p>Dans les restaurants McDonald's du Canada participants des régions précisées dans l'offre. Disponibilité varie d'un restaurant à l'autre. 1 réclamation/offre, sauf indication contraire dans l'offre. Max. 1 offre/transaction. Ne peut être jumelée à aucune autre offre/promo ni rabais/bon.</p>
-      <p>Taxes en sus. Frais de consigne (bouteille et emballage) applicables là où la loi l'exige. Prix McLivraison peuvent être supérieurs à ceux en resto. Frais de livr. (0 $), de service (11 %) et pour petite commande (2 $) (commandes de moins de 12 $, avant tx/frais), et tout autre frais/tx requis par la loi.</p>
-      <p>L'offre ne peut être reproduite, transférée ou utilisée par autrui. Valable au moment où le produit est servi. Des exclusions peuvent s'appliquer. Aucune substitution. Peut ne pas s'appliquer aux commandes personnalisées. Supplément peut s'appliquer pour l'ajout/substitution d'ingrédient/garniture, ou personnalisation. Périodes d'offres valables aux heures locales. McDonald's se réserve le droit de mettre un terme à cette offre en tout temps.</p>
-    </div>
-  `;
-  openSubPage("Modalités de cette offre", modalitesHTML);
+  openSubPage("Modalités de cette offre", `<div class="modalites-text"><p>Valable dans les restaurants McDonald's du Canada participants. Max 1 offre par transaction.</p></div>`);
 });
 
 document.getElementById('restaurantsLink').addEventListener('click', (e) => {
   e.preventDefault();
-  const restauHTML = `
-    <div class="modalites-text">
-      <p>Cette offre est valable dans la grande majorité des restaurants McDonald's du Canada participants.</p>
-      <p>Veuillez présenter l'offre directement au comptoir en restaurant lors de votre commande.</p>
-      <p><em>Note : L'offre s'applique exclusivement au comptoir et n'est pas disponible au service-au-volant, aux bornes ni à la livraison.</em></p>
-    </div>
-  `;
-  openSubPage("Restaurants participants", restauHTML);
+  openSubPage("Restaurants participants", `<div class="modalites-text"><p>Valable dans la grande majorité des restaurants McDonald's au Canada au comptoir.</p></div>`);
 });
 
-const cycleDays = [
-  "Expire dans 3 jours",
-  "Expire dans 2 jours",
-  "Expire demain",
-  "Expire aujourd'hui"
-];
-
+const cycleDays = ["Expire dans 3 jours", "Expire dans 2 jours", "Expire demain", "Expire aujourd'hui"];
 let cycleIndex = parseInt(localStorage.getItem('platine_cycle_index')) || 0;
 if (periodText) {
   periodText.textContent = `Période de l'offre : ${cycleDays[cycleIndex]}`;
-
   periodText.addEventListener('click', () => {
     cycleIndex = (cycleIndex + 1) % cycleDays.length;
     localStorage.setItem('platine_cycle_index', cycleIndex);
